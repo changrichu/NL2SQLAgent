@@ -1,0 +1,31 @@
+# Datasource registry — declare every read-only data source the agent can talk to.
+# Each entry maps a friendly name (used by the API/UI) to a connector class
+# and its connection parameters.
+
+datasources:
+  postgres:
+    type: postgres
+    host: ${POSTGRES_HOST}
+    port: ${POSTGRES_PORT}
+    database: ${POSTGRES_DB}
+    user: ${POSTGRES_USER}
+    password: ${POSTGRES_PASSWORD}
+
+  # mysql:
+  #   type: mysql
+  #   host: ${MYSQL_HOST}
+  #   port: 3306
+  #   database: ${MYSQL_DB}
+  #   user: ${MYSQL_USER}
+  #   password: ${MYSQL_PASSWORD}
+
+  # clickhouse:
+  #   type: clickhouse
+  #   host: ${CLICKHOUSE_HOST}
+  #   port: 8123
+  #   database: ${CLICKHOUSE_DB}
+
+  # excel:
+  #   type: excel
+  #   path: data/sample/sales.xlsx
+  #   sheet: Sheet1

@@ -1,0 +1,40 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: askdata_demo
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  api:
+    build: .
+    depends_on:
+      - postgres
+    env_file: .env
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: askdata_demo
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "8000:8000"
+    command: uvicorn askdata.main:app --host 0.0.0.0 --port 8000
+
+  ui:
+    build: .
+    depends_on:
+      - api
+    env_file: .env
+    ports:
+      - "8501:8501"
+    command: streamlit run src/askdata/web_ui/streamlit_app.py --server.address 0.0.0.0 --server.port 8501
+
+volumes:
+  postgres_data:

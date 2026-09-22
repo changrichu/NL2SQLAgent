@@ -1,0 +1,43 @@
+# Business metric registry — product/ops maintain this file, no code change needed.
+# Each metric has: name, description (for retrieval), and a parameterised SQL template.
+#
+# The agent matches the user's question against `name` + `description`, and
+# injects the matched SQL template into the LLM context.
+
+metrics:
+  复购率:
+    description: 30 天内再次购买的客户比例(同一 user_id 下单 >= 2 次)
+    sql_template: |
+      SELECT
+        COUNT(DISTINCT CASE WHEN order_count >= 2 THEN user_id END)::float
+        / NULLIF(COUNT(DISTINCT user_id), 0) AS repurchase_rate
+      FROM (
+        SELECT user_id, COUNT(*) AS order_count
+        FROM orders
+        WHERE created_at >= NOW() - INTERVAL '30 days'
+          AND status = 'completed'
+        GROUP BY user_id
+      ) t
+
+  月活用户:
+    description: 当月有登录行为的独立用户数(MAU)
+    sql_template: |
+      SELECT COUNT(DISTINCT user_id) AS mau
+      FROM user_logins
+      WHERE login_at >= DATE_TRUNC('month', NOW())
+
+  GMV:
+    description: 商品交易总额(已完成订单金额)
+    sql_template: |
+      SELECT SUM(amount) AS gmv
+      FROM orders
+      WHERE status = 'completed'
+        AND created_at >= DATE_TRUNC('month', NOW())
+
+  日订单数:
+    description: 当日已支付订单总数
+    sql_template: |
+      SELECT COUNT(*) AS daily_orders
+      FROM orders
+      WHERE DATE(created_at) = CURRENT_DATE
+        AND status IN ('paid', 'completed')
