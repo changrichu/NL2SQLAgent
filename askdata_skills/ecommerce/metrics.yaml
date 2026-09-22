@@ -1,0 +1,253 @@
+skill: ecommerce
+description: 电商行业核心指标 — 涵盖 GMV、转化、留存、客单、退款全链路
+
+# 表结构假设(用户实际 schema 不一致时,字段名以 LLM 推断为准):
+#   orders(id, user_id, amount, status, created_at, paid_at, refunded_at)
+#   order_items(id, order_id, product_id, quantity, unit_price)
+#   products(id, name, category_id, price, cost)
+#   users(id, name, email, region, channel, created_at)
+#   categories(id, name, parent_id)
+#   page_views(id, user_id, page, created_at)
+#   cart_items(id, user_id, product_id, quantity, created_at)
+
+metrics:
+  GMV:
+    description: 当月商品交易总额(已完成订单金额,排除取消/退款/未支付)
+    sql_template: |
+      SELECT COALESCE(SUM(amount), 0) AS gmv
+      FROM orders
+      WHERE status IN ('paid', 'completed', 'shipped', 'delivered')
+        AND created_at >= DATE_TRUNC('month', NOW())
+
+  订单数_当日:
+    description: 当日已支付订单总数
+    sql_template: |
+      SELECT COUNT(*) AS daily_orders
+      FROM orders
+      WHERE DATE(created_at) = CURRENT_DATE
+        AND status IN ('paid', 'completed', 'shipped', 'delivered')
+
+  订单数_当月:
+    description: 当月订单总数(含各状态)
+    sql_template: |
+      SELECT COUNT(*) AS monthly_orders
+      FROM orders
+      WHERE created_at >= DATE_TRUNC('month', NOW())
+
+  复购率:
+    description: 30 天内下过 >=2 单的用户占总下单用户比例
+    sql_template: |
+      SELECT
+        COUNT(DISTINCT CASE WHEN order_count >= 2 THEN user_id END)::float
+        / NULLIF(COUNT(DISTINCT user_id), 0) AS repurchase_rate
+      FROM (
+        SELECT user_id, COUNT(*) AS order_count
+        FROM orders
+        WHERE created_at >= NOW() - INTERVAL '30 days'
+          AND status IN ('paid', 'completed', 'shipped', 'delivered')
+        GROUP BY user_id
+      ) t
+
+  客单价:
+    description: 当月平均每笔订单金额(AOV)
+    sql_template: |
+      SELECT COALESCE(AVG(amount), 0) AS avg_order_value
+      FROM orders
+      WHERE created_at >= DATE_TRUNC('month', NOW())
+        AND status IN ('paid', 'completed', 'shipped', 'delivered')
+
+  客单价_同比:
+    description: 当月客单价对比去年同月(YoY)
+    sql_template: |
+      WITH this_month AS (
+        SELECT AVG(amount) AS aov FROM orders
+        WHERE created_at >= DATE_TRUNC('month', NOW())
+          AND status IN ('paid', 'completed', 'shipped', 'delivered')
+      ),
+      last_year AS (
+        SELECT AVG(amount) AS aov FROM orders
+        WHERE created_at >= DATE_TRUNC('month', NOW() - INTERVAL '1 year')
+          AND created_at <  DATE_TRUNC('month', NOW())
+          AND status IN ('paid', 'completed', 'shipped', 'delivered')
+      )
+      SELECT
+        this_month.aov AS aov_this_month,
+        last_year.aov AS aov_last_year,
+        (this_month.aov - last_year.aov) / NULLIF(last_year.aov, 0) AS aov_yoy_growth
+      FROM this_month, last_year
+
+  月活买家:
+    description: 当月有成交的独立用户数(MAU 电商口径)
+    sql_template: |
+      SELECT COUNT(DISTINCT user_id) AS monthly_active_buyers
+      FROM orders
+      WHERE created_at >= DATE_TRUNC('month', NOW())
+        AND status IN ('paid', 'completed', 'shipped', 'delivered')
+
+  新客占比:
+    description: 当月新客户(历史首单)占总客户比例
+    sql_template: |
+      WITH first_orders AS (
+        SELECT user_id, MIN(DATE(created_at)) AS first_order_date
+        FROM orders
+        WHERE status IN ('paid', 'completed', 'shipped', 'delivered')
+        GROUP BY user_id
+      )
+      SELECT
+        COUNT(DISTINCT CASE WHEN fo.first_order_date >= DATE_TRUNC('month', NOW())
+                            THEN fo.user_id END)::float
+        / NULLIF(COUNT(DISTINCT fo.user_id), 0) AS new_customer_rate
+      FROM first_orders fo
+      WHERE fo.first_order_date <= CURRENT_DATE
+
+  转化率_30天:
+    description: 30 天内 浏览 → 下单 转化比例(关联 page_views 与 orders)
+    sql_template: |
+      WITH viewers AS (
+        SELECT DISTINCT user_id FROM page_views
+        WHERE created_at >= NOW() - INTERVAL '30 days'
+      ),
+      buyers AS (
+        SELECT DISTINCT user_id FROM orders
+        WHERE created_at >= NOW() - INTERVAL '30 days'
+          AND status IN ('paid', 'completed', 'shipped', 'delivered')
+      )
+      SELECT
+        COUNT(DISTINCT b.user_id)::float
+        / NULLIF(COUNT(DISTINCT v.user_id), 0) AS conversion_rate
+      FROM viewers v
+      LEFT JOIN buyers b ON v.user_id = b.user_id
+
+  加购率:
+    description: 30 天内 浏览 → 加购 转化比例
+    sql_template: |
+      WITH viewers AS (
+        SELECT DISTINCT user_id FROM page_views
+        WHERE created_at >= NOW() - INTERVAL '30 days'
+      ),
+      cart_users AS (
+        SELECT DISTINCT user_id FROM cart_items
+        WHERE created_at >= NOW() - INTERVAL '30 days'
+      )
+      SELECT
+        COUNT(DISTINCT c.user_id)::float
+        / NULLIF(COUNT(DISTINCT v.user_id), 0) AS cart_add_rate
+      FROM viewers v
+      LEFT JOIN cart_users c ON v.user_id = c.user_id
+
+  购物车放弃率:
+    description: 加购后 24 小时内未支付的比例
+    sql_template: |
+      WITH cart_added AS (
+        SELECT user_id, MIN(created_at) AS added_at
+        FROM cart_items
+        WHERE created_at >= NOW() - INTERVAL '30 days'
+        GROUP BY user_id
+      ),
+      cart_paid AS (
+        SELECT DISTINCT user_id FROM orders
+        WHERE created_at >= NOW() - INTERVAL '30 days'
+          AND status IN ('paid', 'completed', 'shipped', 'delivered')
+      )
+      SELECT
+        COUNT(DISTINCT CASE WHEN cp.user_id IS NULL THEN ca.user_id END)::float
+        / NULLIF(COUNT(DISTINCT ca.user_id), 0) AS cart_abandon_rate
+      FROM cart_added ca
+      LEFT JOIN cart_paid cp ON ca.user_id = cp.user_id
+
+  退款率_30天:
+    description: 30 天内退款订单数占总已完成订单比例
+    sql_template: |
+      SELECT
+        COUNT(DISTINCT CASE WHEN status = 'refunded' THEN id END)::float
+        / NULLIF(COUNT(*), 0) AS refund_rate
+      FROM orders
+      WHERE created_at >= NOW() - INTERVAL '30 days'
+
+  退款金额_当月:
+    description: 当月退款总金额
+    sql_template: |
+      SELECT COALESCE(SUM(amount), 0) AS refunded_amount
+      FROM orders
+      WHERE status = 'refunded'
+        AND created_at >= DATE_TRUNC('month', NOW())
+
+  热销商品TOP10:
+    description: 30 天内销量 TOP10 商品
+    sql_template: |
+      SELECT p.id, p.name, SUM(oi.quantity)::int AS total_qty,
+             SUM(oi.quantity * oi.unit_price) AS gmv
+      FROM order_items oi
+      JOIN orders o ON o.id = oi.order_id
+      JOIN products p ON p.id = oi.product_id
+      WHERE o.created_at >= NOW() - INTERVAL '30 days'
+        AND o.status IN ('paid', 'completed', 'shipped', 'delivered')
+      GROUP BY p.id, p.name
+      ORDER BY total_qty DESC
+      LIMIT 10
+
+  热销品类TOP5:
+    description: 30 天内销售额 TOP5 商品类目
+    sql_template: |
+      SELECT c.id, c.name, SUM(oi.quantity * oi.unit_price) AS gmv,
+             SUM(oi.quantity)::int AS total_qty
+      FROM order_items oi
+      JOIN orders o ON o.id = oi.order_id
+      JOIN products p ON p.id = oi.product_id
+      JOIN categories c ON c.id = p.category_id
+      WHERE o.created_at >= NOW() - INTERVAL '30 days'
+        AND o.status IN ('paid', 'completed', 'shipped', 'delivered')
+      GROUP BY c.id, c.name
+      ORDER BY gmv DESC
+      LIMIT 5
+
+  渠道GMV分布:
+    description: 30 天内各获客渠道的 GMV 占比
+    sql_template: |
+      SELECT u.channel,
+             COUNT(DISTINCT o.id) AS order_count,
+             SUM(o.amount) AS gmv
+      FROM orders o
+      JOIN users u ON u.id = o.user_id
+      WHERE o.created_at >= NOW() - INTERVAL '30 days'
+        AND o.status IN ('paid', 'completed', 'shipped', 'delivered')
+      GROUP BY u.channel
+      ORDER BY gmv DESC
+
+  RFM高价值客户:
+    description: RFM 模型:R(近 30 天有购买)+ F(>=3 单)+ M(累计>=1000)
+    sql_template: |
+      WITH rfm AS (
+        SELECT user_id,
+          NOW() - MAX(created_at) AS recency,
+          COUNT(*) AS frequency,
+          SUM(amount) AS monetary
+        FROM orders
+        WHERE status IN ('paid', 'completed', 'shipped', 'delivered')
+        GROUP BY user_id
+      )
+      SELECT user_id, recency, frequency, monetary
+      FROM rfm
+      WHERE recency < INTERVAL '30 days'
+        AND frequency >= 3
+        AND monetary >= 1000
+      ORDER BY monetary DESC
+
+  流失客户数_90天:
+    description: 90 天前有购买、90 天内无购买的客户数
+    sql_template: |
+      WITH active_90d_ago AS (
+        SELECT DISTINCT user_id FROM orders
+        WHERE created_at >= NOW() - INTERVAL '180 days'
+          AND created_at <  NOW() - INTERVAL '90 days'
+          AND status IN ('paid', 'completed', 'shipped', 'delivered')
+      ),
+      active_recent AS (
+        SELECT DISTINCT user_id FROM orders
+        WHERE created_at >= NOW() - INTERVAL '90 days'
+          AND status IN ('paid', 'completed', 'shipped', 'delivered')
+      )
+      SELECT COUNT(*) AS churned_customers
+      FROM active_90d_ago a
+      LEFT JOIN active_recent r ON a.user_id = r.user_id
+      WHERE r.user_id IS NULL

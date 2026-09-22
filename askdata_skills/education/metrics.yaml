@@ -1,0 +1,159 @@
+skill: education
+description: 教育行业核心指标 — 涵盖招生、学习效果、续报、退课、教学质量全维度
+
+# 表结构假设:
+#   courses(id, name, subject, level, started_at, ended_at, price)
+#   enrollments(id, student_id, course_id, status, enrolled_at, refunded_at, progress)
+#   students(id, name, email, grade, signup_at)
+#   teachers(id, name, subject)
+#   class_sessions(id, course_id, teacher_id, session_date, hours, status)
+#   learning_events(id, student_id, course_id, event_type, duration_min, created_at)
+#   course_feedback(id, student_id, course_id, score, comment, created_at)
+
+metrics:
+  在读学员数:
+    description: 当前在读学员总数(未退课、未结业)
+    sql_template: |
+      SELECT COUNT(*) AS active_students
+      FROM enrollments
+      WHERE status = 'active'
+
+  新增报名_当月:
+    description: 当月新增报名数
+    sql_template: |
+      SELECT COUNT(*) AS new_enrollments
+      FROM enrollments
+      WHERE enrolled_at >= DATE_TRUNC('month', NOW())
+
+  完课率:
+    description: 完成全部课时(progress>=1.0)的学员比例
+    sql_template: |
+      SELECT
+        COUNT(DISTINCT CASE WHEN progress >= 1.0 THEN student_id END)::float
+        / NULLIF(COUNT(DISTINCT student_id), 0) AS completion_rate
+      FROM enrollments
+      WHERE status IN ('active', 'completed')
+
+  平均学习进度:
+    description: 所有在读学员的平均课程进度
+    sql_template: |
+      SELECT COALESCE(AVG(progress), 0) AS avg_progress
+      FROM enrollments
+      WHERE status = 'active'
+
+  续报率:
+    description: 课程结束后继续报名下一期的学员比例
+    sql_template: |
+      WITH last_period_students AS (
+        SELECT DISTINCT student_id FROM enrollments
+        WHERE enrolled_at < NOW() - INTERVAL '90 days'
+          AND status IN ('completed', 'active')
+      ),
+      renewed_students AS (
+        SELECT DISTINCT student_id FROM enrollments e2
+        WHERE e2.enrolled_at >= NOW() - INTERVAL '30 days'
+          AND EXISTS (
+            SELECT 1 FROM enrollments e1
+            WHERE e1.student_id = e2.student_id
+              AND e1.enrolled_at < NOW() - INTERVAL '30 days'
+          )
+      )
+      SELECT
+        COUNT(DISTINCT r.student_id)::float
+        / NULLIF(COUNT(DISTINCT lps.student_id), 0) AS renewal_rate
+      FROM last_period_students lps
+      LEFT JOIN renewed_students r ON lps.student_id = r.student_id
+
+  退课率_90天:
+    description: 90 天内退课学员占报名学员比例
+    sql_template: |
+      SELECT
+        COUNT(DISTINCT CASE WHEN status = 'refunded' THEN student_id END)::float
+        / NULLIF(COUNT(DISTINCT student_id), 0) AS refund_rate
+      FROM enrollments
+      WHERE enrolled_at >= NOW() - INTERVAL '90 days'
+
+  退款金额_当月:
+    description: 当月退款总金额(基于课程定价 × 退课数)
+    sql_template: |
+      SELECT COALESCE(SUM(c.price), 0) AS refunded_amount
+      FROM enrollments e
+      JOIN courses c ON c.id = e.course_id
+      WHERE e.status = 'refunded'
+        AND e.refunded_at >= DATE_TRUNC('month', NOW())
+
+  课时消耗_当月:
+    description: 当月实际消耗课时总时长
+    sql_template: |
+      SELECT COALESCE(SUM(hours), 0) AS total_hours
+      FROM class_sessions
+      WHERE DATE(session_date) >= DATE_TRUNC('month', CURRENT_DATE)
+        AND status = 'completed'
+
+  学员日活:
+    description: 当日有学习行为的独立学员数
+    sql_template: |
+      SELECT COUNT(DISTINCT student_id) AS dau
+      FROM learning_events
+      WHERE DATE(created_at) = CURRENT_DATE
+
+  学员周活:
+    description: 7 天内有学习行为的独立学员数
+    sql_template: |
+      SELECT COUNT(DISTINCT student_id) AS wau
+      FROM learning_events
+      WHERE created_at >= NOW() - INTERVAL '7 days'
+
+  平均学习时长:
+    description: 30 天内学员平均学习时长(分钟)
+    sql_template: |
+      SELECT COALESCE(AVG(daily_minutes), 0) AS avg_minutes
+      FROM (
+        SELECT student_id, DATE(created_at) AS day, SUM(duration_min) AS daily_minutes
+        FROM learning_events
+        WHERE created_at >= NOW() - INTERVAL '30 days'
+          AND event_type IN ('video_watch', 'homework', 'quiz')
+        GROUP BY student_id, DATE(created_at)
+      ) t
+
+  NPS:
+    description: 学员净推荐值(9-10 推荐者 - 0-6 贬损者)
+    sql_template: |
+      SELECT
+        (COUNT(CASE WHEN score >= 9 THEN 1 END)::float -
+         COUNT(CASE WHEN score <= 6 THEN 1 END)::float)
+        / NULLIF(COUNT(*), 0) * 100 AS nps
+      FROM course_feedback
+      WHERE created_at >= DATE_TRUNC('month', NOW())
+
+  课程评分_平均:
+    description: 课程平均评分(0-10)
+    sql_template: |
+      SELECT COALESCE(AVG(score), 0) AS avg_rating
+      FROM course_feedback
+      WHERE created_at >= NOW() - INTERVAL '90 days'
+
+  教师课时统计:
+    description: 当月每位教师的课时数与课时收入
+    sql_template: |
+      SELECT t.id, t.name,
+        COUNT(cs.id) AS session_count,
+        COALESCE(SUM(cs.hours), 0) AS total_hours
+      FROM teachers t
+      LEFT JOIN class_sessions cs ON cs.teacher_id = t.id
+        AND DATE(cs.session_date) >= DATE_TRUNC('month', CURRENT_DATE)
+        AND cs.status = 'completed'
+      GROUP BY t.id, t.name
+      ORDER BY total_hours DESC
+
+  课程招生排行:
+    description: 当月报名人数 TOP10 课程
+    sql_template: |
+      SELECT c.id, c.name, COUNT(e.id) AS enroll_count,
+             COALESCE(SUM(c.price), 0) AS revenue
+      FROM enrollments e
+      JOIN courses c ON c.id = e.course_id
+      WHERE e.enrolled_at >= DATE_TRUNC('month', NOW())
+      GROUP BY c.id, c.name
+      ORDER BY enroll_count DESC
+      LIMIT 10

@@ -49,16 +49,25 @@ class NL2SQLAgent:
         llm: LLMClient,
         datasource: str = "postgres",
         max_retries: int = DEFAULT_MAX_RETRIES,
+        skill: Optional[str] = None,
     ):
         if datasource not in CONNECTOR_REGISTRY:
             raise ValueError(f"Unknown datasource: {datasource}")
         self.llm = llm
         self.datasource = datasource
         self.max_retries = max_retries
+        self.skill = skill
         connector_cls = CONNECTOR_REGISTRY[datasource]()
         self.connector = connector_cls()
         self.schema_index = SchemaIndex(self.connector)
         self.metrics = MetricsRegistry()
+
+        # Apply industry skill if specified.
+        if skill:
+            from ..skills.registry import SkillRegistry
+
+            SkillRegistry().apply_to_metrics_registry(skill, self.metrics)
+
         self.verifier = SQLVerifier(llm)
 
     # =========================================================

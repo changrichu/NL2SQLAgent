@@ -1,0 +1,215 @@
+skill: saas
+description: SaaS 行业核心指标 — 涵盖增长、活跃、留存、变现、健康度全维度
+
+# 表结构假设:
+#   users(id, email, signup_at, channel, country)
+#   events(id, user_id, event_name, created_at, properties)
+#   subscriptions(id, user_id, plan, amount, status, started_at, cancelled_at, mrr)
+#   surveys(id, user_id, score, created_at)        -- NPS 0-10 分
+#   support_tickets(id, user_id, created_at, resolved_at, priority)
+
+metrics:
+  MAU:
+    description: 月活用户(Monthly Active Users)
+    sql_template: |
+      SELECT COUNT(DISTINCT user_id) AS mau
+      FROM events
+      WHERE created_at >= DATE_TRUNC('month', NOW())
+
+  DAU:
+    description: 日活用户(Daily Active Users)
+    sql_template: |
+      SELECT COUNT(DISTINCT user_id) AS dau
+      WHERE DATE(created_at) = CURRENT_DATE
+        AND event_name IS NOT NULL
+
+  DAU_MAU比:
+    description: 日活/月活 比值(粘性指标)
+    sql_template: |
+      WITH dau AS (
+        SELECT COUNT(DISTINCT user_id) AS n FROM events
+        WHERE DATE(created_at) = CURRENT_DATE
+      ),
+      mau AS (
+        SELECT COUNT(DISTINCT user_id) AS n FROM events
+        WHERE created_at >= DATE_TRUNC('month', NOW())
+      )
+      SELECT dau.n::float / NULLIF(mau.n, 0) AS dau_mau_ratio
+      FROM dau, mau
+
+  WAU:
+    description: 周活用户(Weekly Active Users)
+    sql_template: |
+      SELECT COUNT(DISTINCT user_id) AS wau
+      FROM events
+      WHERE created_at >= NOW() - INTERVAL '7 days'
+
+  新增注册_当日:
+    description: 当日新增注册用户数
+    sql_template: |
+      SELECT COUNT(*) AS new_signups
+      FROM users
+      WHERE DATE(signup_at) = CURRENT_DATE
+
+  新增注册_当月:
+    description: 当月新增注册用户数
+    sql_template: |
+      SELECT COUNT(*) AS new_signups
+      FROM users
+      WHERE signup_at >= DATE_TRUNC('month', NOW())
+
+  留存率_D7:
+    description: 7 日后仍活跃的新用户比例
+    sql_template: |
+      WITH new_users AS (
+        SELECT id AS user_id, DATE(signup_at) AS signup_date
+        FROM users
+        WHERE signup_at >= CURRENT_DATE - INTERVAL '30 days'
+      ),
+      day7_active AS (
+        SELECT DISTINCT user_id FROM events
+        WHERE created_at >= CURRENT_DATE - INTERVAL '7 days'
+      )
+      SELECT
+        COUNT(DISTINCT CASE WHEN d.user_id IS NOT NULL THEN n.user_id END)::float
+        / NULLIF(COUNT(DISTINCT n.user_id), 0) AS d7_retention
+      FROM new_users n
+      LEFT JOIN day7_active d ON n.user_id = d.user_id
+
+  留存率_D30:
+    description: 30 日后仍活跃的新用户比例
+    sql_template: |
+      WITH new_users AS (
+        SELECT id AS user_id, DATE(signup_at) AS signup_date
+        FROM users
+        WHERE signup_at >= CURRENT_DATE - INTERVAL '60 days'
+          AND signup_at <  CURRENT_DATE - INTERVAL '30 days'
+      ),
+      day30_active AS (
+        SELECT DISTINCT user_id FROM events
+        WHERE created_at >= CURRENT_DATE - INTERVAL '7 days'
+      )
+      SELECT
+        COUNT(DISTINCT CASE WHEN d.user_id IS NOT NULL THEN n.user_id END)::float
+        / NULLIF(COUNT(DISTINCT n.user_id), 0) AS d30_retention
+      FROM new_users n
+      LEFT JOIN day30_active d ON n.user_id = d.user_id
+
+  ARPU:
+    description: 每用户平均收入(Monthly ARPU)
+    sql_template: |
+      SELECT COALESCE(SUM(amount), 0)::float
+        / NULLIF(COUNT(DISTINCT user_id), 0) AS arpu
+      FROM subscriptions
+      WHERE started_at >= DATE_TRUNC('month', NOW())
+        AND status IN ('active', 'cancelled')
+
+  ARPPU:
+    description: 每付费用户平均收入
+    sql_template: |
+      SELECT COALESCE(SUM(amount), 0)::float
+        / NULLIF(COUNT(DISTINCT user_id), 0) AS arppu
+      FROM subscriptions
+      WHERE started_at >= DATE_TRUNC('month', NOW())
+        AND status IN ('active', 'cancelled')
+
+  MRR:
+    description: 月度经常性收入(Monthly Recurring Revenue)
+    sql_template: |
+      SELECT COALESCE(SUM(mrr), 0) AS mrr
+      FROM subscriptions
+      WHERE status = 'active'
+
+  ARR:
+    description: 年度经常性收入(Annual Recurring Revenue)
+    sql_template: |
+      SELECT COALESCE(SUM(mrr), 0) * 12 AS arr
+      FROM subscriptions
+      WHERE status = 'active'
+
+  Churn率_月:
+    description: 月度订阅流失率
+    sql_template: |
+      WITH active_start AS (
+        SELECT user_id FROM subscriptions
+        WHERE started_at < DATE_TRUNC('month', NOW())
+          AND (cancelled_at IS NULL OR cancelled_at >= DATE_TRUNC('month', NOW()))
+      ),
+      churned AS (
+        SELECT user_id FROM subscriptions
+        WHERE cancelled_at >= DATE_TRUNC('month', NOW())
+          AND cancelled_at <  DATE_TRUNC('month', NOW()) + INTERVAL '1 month'
+      )
+      SELECT
+        COUNT(DISTINCT c.user_id)::float
+        / NULLIF(COUNT(DISTINCT a.user_id), 0) AS monthly_churn_rate
+      FROM active_start a
+      LEFT JOIN churned c ON a.user_id = c.user_id
+
+  LTV:
+    description: 用户生命周期价值(Lifetime Value,基于历史累计收入)
+    sql_template: |
+      SELECT COALESCE(AVG(total_revenue), 0) AS ltv
+      FROM (
+        SELECT user_id, SUM(amount) AS total_revenue
+        FROM subscriptions
+        GROUP BY user_id
+      ) t
+
+  LTV_CAC比:
+    description: LTV / CAC 比值(健康度>3 为优秀)
+    sql_template: |
+      WITH ltv_avg AS (
+        SELECT AVG(total_revenue) AS v FROM (
+          SELECT user_id, SUM(amount) AS total_revenue
+          FROM subscriptions GROUP BY user_id
+        ) t
+      ),
+      cac AS (
+        SELECT channel,
+          SUM(marketing_spend)::float / NULLIF(COUNT(*), 0) AS cac
+        FROM user_acquisition
+        WHERE acquired_at >= DATE_TRUNC('month', NOW())
+        GROUP BY channel
+      )
+      SELECT cac.channel, cac.cac, ltv_avg.v / NULLIF(cac.cac, 0) AS ltv_cac_ratio
+      FROM cac, ltv_avg
+
+  付费转化率:
+    description: 注册用户中转为付费的比例
+    sql_template: |
+      SELECT
+        COUNT(DISTINCT CASE WHEN s.user_id IS NOT NULL THEN u.id END)::float
+        / NULLIF(COUNT(DISTINCT u.id), 0) AS paid_conversion_rate
+      FROM users u
+      LEFT JOIN subscriptions s ON u.id = s.user_id
+      WHERE u.signup_at <= CURRENT_DATE
+
+  NPS:
+    description: 净推荐值(9-10 推荐者 - 0-6 贬损者)
+    sql_template: |
+      SELECT
+        (COUNT(CASE WHEN score >= 9 THEN 1 END)::float -
+         COUNT(CASE WHEN score <= 6 THEN 1 END)::float)
+        / NULLIF(COUNT(*), 0) * 100 AS nps
+      FROM surveys
+      WHERE created_at >= DATE_TRUNC('month', NOW())
+
+  客诉率_当月:
+    description: 当月客诉工单占活跃用户比例
+    sql_template: |
+      SELECT
+        COUNT(DISTINCT t.id)::float
+        / NULLIF((SELECT COUNT(DISTINCT user_id) FROM events
+                  WHERE created_at >= DATE_TRUNC('month', NOW())), 0) AS support_ticket_rate
+      FROM support_tickets t
+      WHERE t.created_at >= DATE_TRUNC('month', NOW())
+        AND t.priority IN ('high', 'urgent')
+
+  工单平均解决时长:
+    description: 当月已解决工单的平均处理时长(小时)
+    sql_template: |
+      SELECT AVG(EXTRACT(EPOCH FROM (resolved_at - created_at)) / 3600.0) AS avg_resolution_hours
+      FROM support_tickets
+      WHERE resolved_at IS NOT NULL
+        AND created_at >= DATE_TRUNC('month', NOW())
