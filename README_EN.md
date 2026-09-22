@@ -1,9 +1,19 @@
 # 💬 NL2SQLAgent · Natural-Language Data Analysis Agent
 
-> **One sentence to query the whole company's data.** Business users ask in plain language, NL2SQLAgent writes safe SQL, runs it, and returns visualized results.
+> **One sentence to query the whole company's data.** Business users query enterprise databases without writing SQL.
 
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![GitHub stars](https://img.shields.io/github/stars/changrichu/NL2SQLAgent.svg)](https://github.com/changrichu/NL2SQLAgent/stargazers)
+
+## ✨ Features
+
+- 🔌 **Pluggable LLMs**: OpenAI / DeepSeek / Qwen / **Doubao** / Zhipu GLM, swap with 1 line
+- 🧠 **Schema retrieval**: BGE-M3 Embedding + metadata filter, Top-5 recall 86%
+- 🔐 **SQL safety sandbox**: keyword whitelist + dangerous-pattern block + auto LIMIT
+- 🔄 **ReAct self-correction**: LLM rewrites SQL on failure, exec success 72% → 94%
+- 📊 **Auto chart + insight**: bar/line/pie/scatter picked automatically + 1-2 sentence insight
+- 📦 **3 industry templates**: e-commerce (18) / SaaS (19) / education (15) = 52 metrics ready to use
 
 **English** | [简体中文](./README.md)
 

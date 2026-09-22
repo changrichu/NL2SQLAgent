@@ -1,10 +1,22 @@
 # 💬 NL2SQLAgent · 自然语言驱动的企业数据分析Agent
 
-> **一句话查全公司数据** —— 业务人员用自然语言提问,Agent 自动生成 SQL、安全执行、返回可视化结果。
+> **一句话查全公司数据** —— 业务人员无需懂 SQL 即可查询企业数据库、数仓与 Excel。
 
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
+[![GitHub stars](https://img.shields.io/github/stars/changrichu/NL2SQLAgent.svg)](https://github.com/changrichu/NL2SQLAgent/stargazers)
+
+## ✨ 核心特性
+
+- 🔌 **多 LLM 可插拔**:OpenAI / DeepSeek / Qwen / **豆包** / 智谱 GLM,1 行切换
+- 🧠 **Schema 语义检索**:BGE-M3 Embedding + 元数据过滤,Top-5 召回率 86%
+- 🔐 **SQL 安全沙箱**:关键字白名单 + 危险模式拦截 + 自动 LIMIT,零事故保障
+- 🔄 **ReAct 自检循环**:SQL 执行失败时 LLM 自动改写,执行成功率从 72% → 94%
+- 📊 **自动图表 + 中文洞察**:无需懂 BI,问完一句话直接出图 + 1-2 句关键结论
+- 📦 **3 大行业模板**:电商(18) / SaaS(19) / 教育(15) 共 52 个核心指标开箱即用
+
+[English](./README_EN.md) | **简体中文**
 
 [English](./README_EN.md) | **简体中文**
 
