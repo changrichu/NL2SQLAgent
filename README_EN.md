@@ -1,4 +1,4 @@
-# 💬 AskData: Natural-Language Data Analysis Agent
+# 💬 AskData: NL2SQL · Natural-Language Data Analysis Agent
 
 > **One sentence to query the whole company's data.** Business users ask in plain language, AskData writes safe SQL, runs it, and returns visualized results.
 
