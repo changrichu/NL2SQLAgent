@@ -1,6 +1,6 @@
-# Contributing to AskData
+# Contributing to NL2SQLAgent
 
-Thanks for your interest in improving AskData! 🎉
+Thanks for your interest in improving NL2SQLAgent! 🎉
 
 ## Ground Rules
 
@@ -11,8 +11,8 @@ Thanks for your interest in improving AskData! 🎉
 ## Local Development
 
 ```bash
-git clone https://github.com/changrichu/AskData.git
-cd AskData
+git clone https://github.com/changrichu/NL2SQLAgent.git
+cd NL2SQLAgent
 python -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 cp .env.example .env   # then fill in your keys

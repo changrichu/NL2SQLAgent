@@ -1,4 +1,4 @@
-# 💬 AskData: NL2SQL · 自然语言驱动的企业数据分析 Agent
+# 💬 NL2SQLAgent · 自然语言驱动的企业数据分析Agent
 
 > **一句话查全公司数据** —— 业务人员用自然语言提问,Agent 自动生成 SQL、安全执行、返回可视化结果。
 
@@ -10,9 +10,9 @@
 
 ---
 
-## ✨ 为什么需要 AskData?
+## ✨ 为什么需要 NL2SQLAgent?
 
-| 痛点 | 豆包 / 通用 ChatGPT | **AskData** |
+| 痛点 | 豆包 / 通用 ChatGPT | **NL2SQLAgent** |
 |---|---|---|
 | 连不上企业数据库 | ❌ 只能回答通用问题 | ✅ 通过连接器直接对接 PG/MySQL/ClickHouse |
 | "复购率"等口径不统一 | ❌ 每次问得不一样 | ✅ 业务指标中台(YAML)+ SQL 模板 |
@@ -27,8 +27,8 @@
 ### 1. 安装依赖
 
 ```bash
-git clone https://github.com/changrichu/AskData.git
-cd AskData
+git clone https://github.com/changrichu/NL2SQLAgent.git
+cd NL2SQLAgent
 pip install -r requirements.txt
 ```
 
@@ -272,7 +272,7 @@ askdata/
 
 ## 🤝 跟 MemoryAgent 的关系
 
-| | MemoryAgent | AskData |
+| | MemoryAgent | NL2SQLAgent |
 |---|---|---|
 | 任务 | 对话(回答问题) | 数据查询(执行 SQL) |
 | 触发 | 用户提问 → 检索知识 | 用户提问 → 跑 SQL |

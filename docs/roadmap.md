@@ -1,4 +1,4 @@
-# AskData Roadmap
+# NL2SQLAgent Roadmap
 
 ## v0.1.0 — MVP ✅
 - LLM Provider abstraction (OpenAI / DeepSeek / Qwen / 豆包 / 智谱)

@@ -1,6 +1,6 @@
-# 💬 AskData: NL2SQL · Natural-Language Data Analysis Agent
+# 💬 NL2SQLAgent · Natural-Language Data Analysis Agent
 
-> **One sentence to query the whole company's data.** Business users ask in plain language, AskData writes safe SQL, runs it, and returns visualized results.
+> **One sentence to query the whole company's data.** Business users ask in plain language, NL2SQLAgent writes safe SQL, runs it, and returns visualized results.
 
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
@@ -9,9 +9,9 @@
 
 ---
 
-## ✨ Why AskData?
+## ✨ Why NL2SQLAgent?
 
-| Pain Point | Generic LLMs | **AskData** |
+| Pain Point | Generic LLMs | **NL2SQLAgent** |
 |---|---|---|
 | Connect to enterprise DBs | ❌ No | ✅ Pluggable connectors (PG / MySQL / ClickHouse / Excel / API) |
 | Unifying metric definitions | ❌ Inconsistent answers | ✅ Business metric registry (YAML) + SQL templates |
@@ -24,8 +24,8 @@
 ## 🚀 Quick Start
 
 ```bash
-git clone https://github.com/changrichu/AskData.git
-cd AskData
+git clone https://github.com/changrichu/NL2SQLAgent.git
+cd NL2SQLAgent
 pip install -r requirements.txt
 cp .env.example .env       # fill in LLM key + DB credentials
 make api                    # FastAPI on :8000

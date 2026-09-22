@@ -1,4 +1,4 @@
-# AskData Architecture
+# NL2SQLAgent Architecture
 
 ## High-level flow
 
